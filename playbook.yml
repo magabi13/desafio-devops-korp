@@ -1,0 +1,41 @@
+---
+- name: Automatizar a Infraestrutura do Projeto Korp
+  hosts: localhost
+  connection: local
+  become: true
+
+  tasks:
+    - name: 1. Garantir que as pastas de configuração existem
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - ./nginx
+        - ./prometheus
+
+    - name: 2. Buildar a imagem Docker do serviço Go
+      community.docker.docker_image:
+        name: http-server-projeto-korp
+        build:
+          path: .
+        source: build
+        force_source: true
+
+    - name: 3. Subir todos os serviços com o Docker Compose
+      community.docker.docker_compose_v2:
+        project_src: .
+        state: present
+
+    - name: 4. Aguardar o serviço iniciar completamente
+      uri:
+        url: http://localhost:80/projeto-korp
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 5
+      delay: 2
+
+    - name: 5. Validar o funcionamento e exibir o JSON no console
+      debug:
+        msg: "Resposta do Servidor Korp: {{ result.json }}"
